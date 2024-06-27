@@ -26,6 +26,7 @@ list_RO = [] # Repair Order (Unic value, key of the database)
 list_reason_for_return = [] # Reason of return given by the customer 
 list_MSN = [] # MSN of the aircraft
 
+# List of files which rised an error 
 
 ##------- MAIN LOOP -------##
 def main():
@@ -36,9 +37,10 @@ def main():
     Return: 
         None
     """
+    i=1; extraction_error = False # Is changed to True if an error has occured during data extraction in the Word documents
+    list_error_files, list_error = [], []
 
-    extraction_error = False # Change to True if an error has occured during data extraction in the Word documents
-    i = 1
+    ##----- FILE OPENING AND DATA STORED IN PYTHON LISTS-----##
     # Loop over all the files present in the folder to extract data and store it into the lists
     for file_name in list_of_files_names:
         try:
@@ -47,46 +49,51 @@ def main():
             print(f'Extraction des données du document {i} / {len(list_of_files_names)}    {round((i)/len(list_of_files_names)*100, 1)} %')
             i+=1
 
-        # If an error occurs during the data extraction
+        # If an error occurs during the extraction on a document it will be ignored. 
+        # The user will be informed of files which led to an error at the end of the program execution
         except Exception as error:
-            print(f'\n<!> Erreur lors de l\'exctration du document {list_of_files_names[i-1]} : ')
-            print(error)
-            print('Vérifier qu\'aucun document Word n\'est ouvert en fond.')
+            list_error_files.append(list_of_files_names[i-1])
+            list_error.append(error)
+
             extraction_error = True
-            break
 
-    # No error has occured during the extraction
-    if not extraction_error:
-        find_duplicates()    
-        f_data = delete_duplicates() # Filtered data without duplicates
-        
-        # Generation of the .txt file
-        try: 
-            store_data_as_txt(f_data["RO"], f_data["date"], f_data["RFR"], f_data["MSN"])
-        except Exception as error:
-            print('<!> Erreur lors de la génération du fichier .txt :')
-            print(error)
+            
+    ##----- MANAGEMENT OF THE DUPLICATES -----##
+    print(f'\n\n{" GESTION DES DOUBLONS ":-^50}')
+    find_duplicates()    
+    f_data = delete_duplicates() # Filtered data without duplicates
+    
+
+    ##----- CONVERT PYTHON LIST TO .TXT and EXCEL files -----##
+    print(f'{" GESTION DES FICHIERS DE SORTIE ":-^50}')
+    # Generation of the .txt file
+    try: 
+        store_data_as_txt(f_data["RO"], f_data["date"], f_data["RFR"], f_data["MSN"])
+    except Exception as error:
+        print('<!> Erreur lors de la génération du fichier .txt :')
+        print(error)
 
 
-        excel_to_generate = input('\nVoulez-vous générer un fichier Excel en plus du fichier.txt ? La création de ce fichier peut ne pas aboutir. O/N > ').upper()
+    # Generation of the Excel file
+    try:
+        store_data_as_Excel(f_data["RO"], f_data["date"], f_data["RFR"], f_data["MSN"])
+    except Exception as error:
+        print("<!> Erreur lors de la génération du fichier Excel. Vérifier que le fichier Excel n'est pas ouvert. Message d\'erreur : ")
+        print(error)
 
-        if excel_to_generate == 'O':
-            # Generation of the Excel file
-            try:
-                store_data_as_Excel(f_data["RO"], f_data["date"], f_data["RFR"], f_data["MSN"])
-            except Exception as error:
-                print("<!> Erreur lors de la génération du fichier Excel. Vérifier que le fichier Excel n'est pas ouvert. Message d\'erreur : ")
-                print(error)
-        elif excel_to_generate == 'N':
-            print('Vous avez choisi de ne pas générer de fichier Excel.')
-        elif excel_to_generate != 'O' or excel_to_generate != 'N':
-            print('Votre réponse n\'est pas reconnue. Le fichier Excel ne sera pas généré.')
 
+    ##----- OUTPUT OF THE ERRORS -----##
+    print(f'\n\n{" GESTION DES ERREURS ":-^50}')
     # Error occured during the extraction
-    else:
-        print('\n\n<!> Une erreur est survenue. Les fichiers peuvent ne pas avoir été créés.')
+    if extraction_error:
+        print('<!> Les documents suivants n\'ont pas pu être ouverts :   <!>')
+        for i in range(len(list_error_files)):
+            print(list_error_files[i])
+            print(f'Cause de l\'erreur : {list_error[i]}')
 
-    print('\n \nProgramme réalisé par Mathéo TROUILLE au service support.')
+        print('\nLes données de ces document n\'ont donc pas été extraites.')
+
+    print('\n \nProgramme réalisé par Mathéo TROUILLE au service support (S9).')
     input('Appuyer sur Entrée pour quitter le programme > ')
 
 
@@ -176,7 +183,7 @@ def find_duplicates():
     duplicates = [RO for RO, count in occurences.items() if count > 1]
 
     if len(duplicates) > 0:
-        print(f'\n<!> ATTENTION <!> Les RO suivants ({len(duplicates)} éléments) sont en doublons, seul seront gardés ceux avec la date de modification la plus récente :')
+        print(f'<!> ATTENTION <!> Les RO suivants ({len(duplicates)} éléments) sont en doublons, seul seront gardés ceux avec la date de modification la plus récente :')
         for RO in duplicates: print(RO)
     else:
         print('Aucun doublon trouvé')    
